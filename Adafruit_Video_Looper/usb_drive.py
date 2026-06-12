@@ -24,11 +24,11 @@ class USBDriveReader:
         self._readonly = config.getboolean('usb_drive', 'readonly')
 
     def search_paths(self):
-        """Return a list of paths to search for files. Will return a list of all
-        mounted USB drives.
+        """Return a list of paths to search for files. Returns USB paths with priority:
+        Secondary USB first (if present), then primary USB.
         """
         self._mounter.mount_all()
-        return glob.glob(self._mount_path + '*')
+        return self._mounter.get_priority_paths()
 
     def is_changed(self):
         """Return true if the file search paths have changed, like when a new
