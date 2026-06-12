@@ -53,6 +53,15 @@ class USBDriveMounter:
                  if 'ID_BUS' in x and x['ID_BUS'] == 'usb']
         return nodes != []
 
+    def get_priority_paths(self):
+        """Get USB paths ordered by priority. Secondary (2nd) USB has priority if present."""
+        available_paths = glob.glob(self._root + '*')
+        available_paths.sort()
+        
+        if len(available_paths) >= 2:
+            return [available_paths[1], available_paths[0]]
+        return available_paths
+
     def start_monitor(self):
         """Initialize monitoring of USB drive changes."""
         self._monitor = pyudev.Monitor.from_netlink(self._context)
