@@ -17,6 +17,7 @@ class USBDriveReader:
         self._mounter = USBDriveMounter(root=self._mount_path,
                                         readonly=self._readonly)
         self._mounter.start_monitor()
+        self._previous_usb_count = 0
 
 
     def _load_config(self, config):
@@ -32,9 +33,26 @@ class USBDriveReader:
 
     def is_changed(self):
         """Return true if the file search paths have changed, like when a new
-        USB drive is inserted.
+        USB drive is inserted or removed.
         """
         return self._mounter.poll_changes()
+
+    def get_usb_count(self):
+        """Get current number of connected USB drives."""
+        paths = self._mounter.get_priority_paths()
+        return len(paths)
+
+    def has_usb_count_changed(self):
+        """Check if USB device count has changed since last check.
+        
+        Returns:
+            bool: True if USB count increased or decreased
+        """
+        current_count = self.get_usb_count()
+        changed = current_count != self._previous_usb_count
+        if changed:
+            self._previous_usb_count = current_count
+        return changed
 
     def idle_message(self):
         """Return a message to display when idle and no files are found."""
