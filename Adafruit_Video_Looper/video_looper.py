@@ -19,6 +19,7 @@ import RPi.GPIO as GPIO
 
 from .alsa_config import parse_hw_device
 from .model import Playlist, Movie
+from .usb_priority_manager import USBPriorityManager
 
 # Basic video looper architecure:
 #
@@ -94,6 +95,8 @@ class VideoLooper:
         self._player = self._load_player()
         self._reader = self._load_file_reader()
         self._playlist = None
+        # Initialize USB priority manager for dual USB support
+        self._usb_priority_manager = USBPriorityManager()
         # Load ALSA hardware configuration.
         self._alsa_hw_device = parse_hw_device(self._config.get('alsa', 'hw_device'))
         self._alsa_hw_vol_control = self._config.get('alsa', 'hw_vol_control')
@@ -594,13 +597,23 @@ class VideoLooper:
                     # todo: maybe clear screen to black so that background (image/color) is not visible for videos with a resolution that is < screen resolution
                     self._player.play(movie, loop=player_loop, vol = self._sound_vol)
 
-            # Check for changes in the file search path (like USB drives added)
-            # and rebuild the playlist.
-            if self._reader.is_changed() and not self._playbackStopped:
-                self._print("reader changed, stopping player")
-                self._player.stop(3)  # Up to 3 second delay waiting for old 
-                                      # player to stop.
-                self._print("player stopped")
+            # Check for changes in the file search path (like USB drives added/removed)
+            # and rebuild the playlist. Dual USB switching enabled.
+            if self._reader.is_changed():
+                # Get current USB paths
+                current_paths = self._reader.search_paths()
+                
+                # Update USB priority manager with current paths
+                usb_status = self._usb_priority_manager.update_usb_status(current_paths)
+                
+                self._print(f"USB change detected: {usb_status['action']} (USB count: {usb_status['usb_count']})")
+                
+                # Always stop player and rebuild playlist on USB change
+                if not self._playbackStopped:
+                    self._print("reader changed, stopping player")
+                    self._player.stop(3)
+                    self._print("player stopped")
+                
                 # Rebuild playlist and show countdown again (if OSD enabled).
                 self._playlist = self._build_playlist()
                 #refresh background image
@@ -609,6 +622,9 @@ class VideoLooper:
                 self._prepare_to_run_playlist(self._playlist)
                 self._set_hardware_volume()
                 movie = self._playlist.get_next()
+                
+                # Log USB priority information
+                self._print(f"Primary USB: {usb_status['primary']}, Secondary USB: {usb_status['secondary']}")
 
             # Give the CPU some time to do other tasks. low values increase "responsiveness to changes" and reduce the pause between files
             # but increase CPU usage
